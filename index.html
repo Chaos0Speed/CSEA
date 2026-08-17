@@ -20,7 +20,6 @@
   <h1>Serverless Public Gallery</h1>
   
   <div class="upload-box">
-    <input type="email" id="emailInput" placeholder="Enter your email" required>
     <input type="text" id="nameInput" placeholder="Enter your name" required>
     <input type="file" id="fileInput" accept="image/*">
     <button id="uploadBtn">Upload to Gallery</button>
@@ -35,18 +34,14 @@
     // 1. CONFIGURATION
     // ==========================================
     // YOU MUST STILL PASTE YOUR IMGBB API KEY HERE
-    const IMGBB_API_KEY = 'ffa4d27769b766c270856e930fa92d43';
+    const IMGBB_API_KEY = 'YOUR_IMGBB_API_KEY';
     
     const FORM_ACTION_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSei2mdeE4l-Irv43MG3sQga7bVCarYwSHJgqzD0dUypUgMyBQ/formResponse';
-    
-    // IDs extracted from your configuration
     const FORM_ENTRY_ID_NAME = 'entry.441265152'; 
     const FORM_ENTRY_ID_URL = 'entry.1871454451';  
-    
     const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSLtCTOAoDhmIZ8zhBjBSLTn9UdZ0nr9sZpr_ZD-CSgJPm2BK9u-hZt5N9lv52J1j2BPBw-EzRCvvzm/pub?gid=190044443&single=true&output=csv';
     // ==========================================
 
-    const emailInput = document.getElementById('emailInput');
     const nameInput = document.getElementById('nameInput');
     const fileInput = document.getElementById('fileInput');
     const uploadBtn = document.getElementById('uploadBtn');
@@ -56,10 +51,8 @@
     // --- UPLOAD ROUTINE ---
     uploadBtn.addEventListener('click', async () => {
       const file = fileInput.files[0];
-      const uploaderEmail = emailInput.value.trim();
       const uploaderName = nameInput.value.trim();
 
-      if (!uploaderEmail) return alert("Please enter your email.");
       if (!uploaderName) return alert("Please enter your name.");
       if (!file) return alert("Please select a file.");
 
@@ -82,22 +75,24 @@
 
         statusTxt.innerText = "2/2 Saving data to Google Sheets...";
 
-        // 2. Submit Email, Name, and URL silently to Google Forms
-        const googleFormData = new FormData();
-        googleFormData.append('emailAddress', uploaderEmail); // Appending standard email field
+        // 2. Submit Name and URL silently to Google Forms
+        // CHANGED: Using URLSearchParams so Google Forms accepts the data
+        const googleFormData = new URLSearchParams();
         googleFormData.append(FORM_ENTRY_ID_NAME, uploaderName);
         googleFormData.append(FORM_ENTRY_ID_URL, finalImageUrl);
 
         await fetch(FORM_ACTION_URL, {
           method: 'POST',
           mode: 'no-cors',
-          body: googleFormData
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          body: googleFormData.toString()
         });
 
         statusTxt.innerText = "Done! Image uploaded.";
         fileInput.value = "";
         nameInput.value = "";
-        emailInput.value = "";
         
         displayImage(finalImageUrl, uploaderName);
 
@@ -111,7 +106,8 @@
     // --- LOAD GALLERY ROUTINE ---
     async function loadGallery() {
       try {
-        const response = await fetch(SHEET_CSV_URL);
+        // CHANGED: Added nocache timestamp to force the browser to get the newest CSV
+        const response = await fetch(SHEET_CSV_URL + '&nocache=' + Date.now());
         const csvText = await response.text();
         
         galleryDiv.innerHTML = ""; 
@@ -121,19 +117,14 @@
           const row = rows[i];
           if (!row) continue;
           
-          // Split by comma
           const columns = row.split(',');
-          
-          // We search the row for the URL string dynamically 
-          // just in case Google Sheets changes the column order
           let urlData = "";
           let nameData = "";
           
           for (let col of columns) {
             if (col.includes('http')) {
               urlData = col.trim();
-            } else if (col !== columns[0] && !col.includes('@')) {
-              // Guess the name column by skipping timestamp and email
+            } else if (col !== columns[0]) {
               nameData = col.trim(); 
             }
           }
