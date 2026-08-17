@@ -97,30 +97,48 @@
 
     // --- LOAD GALLERY ROUTINE ---
     // --- LOAD GALLERY ROUTINE ---
+    // --- LOAD GALLERY ROUTINE ---
     async function loadGallery() {
       try {
-        const response = await fetch(config.SHEET_CSV_URL + '&nocache=' + Date.now());
+        // We added strict cache-busting headers here
+        const response = await fetch(config.SHEET_CSV_URL, { 
+          cache: 'no-store',
+          headers: {
+            'Pragma': 'no-cache',
+            'Cache-Control': 'no-cache'
+          }
+        });
+        
         const csvText = await response.text();
         
         galleryDiv.innerHTML = ""; 
-        
-        // Split by newlines, handling both Windows (\r\n) and Mac/Linux (\n)
         const rows = csvText.split(/\r?\n/);
         
-        // Skip the first row (headers)
         for (let i = 1; i < rows.length; i++) {
           const row = rows[i];
-          if (!row.trim()) continue; // Skip empty rows
+          if (!row.trim()) continue;
           
-          const columns = row.split(',');
+          // Robust parser to handle commas inside text
+          const columns = [];
+          let current = '';
+          let inQuotes = false;
           
-          // Since the format is strictly [Timestamp, Name, Link]
-          // The Link is always the last column, Name is the second to last.
-          // .replace(/"/g, '') removes any accidental double-quotes added by Google Sheets.
-          const urlData = columns[columns.length - 1].replace(/"/g, '').trim();
-          const nameData = columns[columns.length - 2].replace(/"/g, '').trim();
+          for (let char of row) {
+            if (char === '"') {
+              inQuotes = !inQuotes; 
+            } else if (char === ',' && !inQuotes) {
+              columns.push(current);
+              current = '';
+            } else {
+              current += char;
+            }
+          }
+          columns.push(current); 
           
-          // Only draw the image if the extracted URL is valid
+          // Column 1 is Name, Column 2 is URL
+          const nameData = columns[1] ? columns[1].trim() : "Anonymous";
+          const urlData = columns[2] ? columns[2].trim() : "";
+          
           if (urlData.startsWith('http')) {
             displayImage(urlData, nameData);
           }
