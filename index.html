@@ -2,147 +2,170 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>ImgBB Image Uploader</title>
+  <title>ImgBB + Google Sheets Gallery</title>
   <style>
-    body { 
-      font-family: system-ui, sans-serif; 
-      max-width: 500px; 
-      margin: 40px auto; 
-      padding: 20px; 
-    }
-    .container { 
-      background: #f9f9f9; 
-      padding: 20px; 
-      border-radius: 8px; 
-      border: 1px solid #ddd; 
-    }
-    .result { 
-      margin-top: 20px; 
-      display: none; 
-      background: #eef;
-      padding: 15px;
-      border-radius: 8px;
-    }
-    .result img { 
-      max-width: 100%; 
-      border-radius: 4px; 
-      margin-bottom: 10px;
-    }
-    input[type="text"] { 
-      width: 100%; 
-      padding: 8px; 
-      margin-top: 5px; 
-      box-sizing: border-box; 
-    }
-    button { 
-      padding: 10px 16px; 
-      background: #007bff; 
-      color: white; 
-      border: none; 
-      border-radius: 4px; 
-      cursor: pointer; 
-      font-weight: bold;
-    }
-    button:disabled { 
-      background: #ccc; 
-    }
-    #status {
-      font-weight: bold;
-    }
+    body { font-family: system-ui, sans-serif; padding: 20px; max-width: 800px; margin: auto; }
+    .upload-box { background: #f0f0f0; padding: 20px; border-radius: 8px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 10px; max-width: 300px; }
+    .upload-box input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+    .upload-box button { padding: 10px; background: #0056b3; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+    .upload-box button:disabled { background: #999; cursor: not-allowed; }
+    #gallery { display: flex; flex-wrap: wrap; gap: 15px; margin-top: 20px; }
+    .gallery-item { text-align: center; font-size: 14px; background: #f9f9f9; padding: 10px; border-radius: 8px; border: 1px solid #ddd; }
+    .gallery-item img { width: 150px; height: 150px; object-fit: cover; border-radius: 6px; background: #eee; margin-bottom: 5px; }
+    #status { font-weight: bold; font-size: 14px; }
   </style>
 </head>
 <body>
 
-  <div class="container">
-    <h2>Upload to ImgBB</h2>
+  <h1>Serverless Public Gallery</h1>
+  
+  <div class="upload-box">
+    <input type="email" id="emailInput" placeholder="Enter your email" required>
+    <input type="text" id="nameInput" placeholder="Enter your name" required>
     <input type="file" id="fileInput" accept="image/*">
-    <br><br>
-    <button id="uploadBtn">Upload Image</button>
-    <p id="status"></p>
-
-    <!-- This section stays hidden until a successful upload -->
-    <div class="result" id="resultContainer">
-      <h3>Upload Successful!</h3>
-      <img id="uploadedImage" src="" alt="Uploaded image preview">
-      <label for="imageUrl">Permanent Shareable Link:</label>
-      <input type="text" id="imageUrl" readonly onclick="this.select()">
-    </div>
+    <button id="uploadBtn">Upload to Gallery</button>
+    <span id="status"></span>
   </div>
 
-  <script>
-    // 1. PASTE YOUR IMGBB API KEY HERE
-    const IMGBB_API_KEY = 'ffa4d27769b766c270856e930fa92d43';
+  <h2>Gallery Data</h2>
+  <div id="gallery">Loading gallery...</div>
 
-    // 2. Grab DOM elements
+  <script>
+    // ==========================================
+    // 1. CONFIGURATION
+    // ==========================================
+    // YOU MUST STILL PASTE YOUR IMGBB API KEY HERE
+    const IMGBB_API_KEY = 'YOUR_IMGBB_API_KEY';
+    
+    const FORM_ACTION_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSei2mdeE4l-Irv43MG3sQga7bVCarYwSHJgqzD0dUypUgMyBQ/formResponse';
+    
+    // IDs extracted from your configuration
+    const FORM_ENTRY_ID_NAME = 'entry.441265152'; 
+    const FORM_ENTRY_ID_URL = 'entry.1871454451';  
+    
+    const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSLtCTOAoDhmIZ8zhBjBSLTn9UdZ0nr9sZpr_ZD-CSgJPm2BK9u-hZt5N9lv52J1j2BPBw-EzRCvvzm/pub?gid=190044443&single=true&output=csv';
+    // ==========================================
+
+    const emailInput = document.getElementById('emailInput');
+    const nameInput = document.getElementById('nameInput');
     const fileInput = document.getElementById('fileInput');
     const uploadBtn = document.getElementById('uploadBtn');
     const statusTxt = document.getElementById('status');
-    const resultContainer = document.getElementById('resultContainer');
-    const uploadedImage = document.getElementById('uploadedImage');
-    const imageUrlInput = document.getElementById('imageUrl');
+    const galleryDiv = document.getElementById('gallery');
 
-    // 3. Handle the Upload
+    // --- UPLOAD ROUTINE ---
     uploadBtn.addEventListener('click', async () => {
       const file = fileInput.files[0];
-      
-      // Basic validation
-      if (!file) {
-        statusTxt.innerText = "Please select an image first.";
-        statusTxt.style.color = "red";
-        return;
-      }
+      const uploaderEmail = emailInput.value.trim();
+      const uploaderName = nameInput.value.trim();
 
-      if (IMGBB_API_KEY === 'YOUR_API_KEY_HERE') {
-        statusTxt.innerText = "Error: You must add your API key to the JavaScript code.";
-        statusTxt.style.color = "red";
-        return;
-      }
+      if (!uploaderEmail) return alert("Please enter your email.");
+      if (!uploaderName) return alert("Please enter your name.");
+      if (!file) return alert("Please select a file.");
 
-      // Update UI for loading state
       uploadBtn.disabled = true;
-      statusTxt.innerText = "Uploading to ImgBB... please wait.";
-      statusTxt.style.color = "blue";
-      resultContainer.style.display = "none";
-
-      // Package the file for the API
-      const formData = new FormData();
-      formData.append('image', file);
+      statusTxt.innerText = "1/2 Uploading image to ImgBB...";
 
       try {
-        // Send the POST request to ImgBB
-        const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+        // 1. Upload to ImgBB
+        const imgFormData = new FormData();
+        imgFormData.append('image', file);
+
+        const imgbbRes = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
           method: 'POST',
-          body: formData
+          body: imgFormData
+        });
+        const imgbbData = await imgbbRes.json();
+        
+        if (!imgbbData.success) throw new Error("ImgBB upload failed.");
+        const finalImageUrl = imgbbData.data.url;
+
+        statusTxt.innerText = "2/2 Saving data to Google Sheets...";
+
+        // 2. Submit Email, Name, and URL silently to Google Forms
+        const googleFormData = new FormData();
+        googleFormData.append('emailAddress', uploaderEmail); // Appending standard email field
+        googleFormData.append(FORM_ENTRY_ID_NAME, uploaderName);
+        googleFormData.append(FORM_ENTRY_ID_URL, finalImageUrl);
+
+        await fetch(FORM_ACTION_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          body: googleFormData
         });
 
-        const data = await response.json();
-
-        // Check if ImgBB accepted the upload
-        if (data.success) {
-          statusTxt.innerText = "Upload complete!";
-          statusTxt.style.color = "green";
-          
-          // Display the resulting image and URL
-          uploadedImage.src = data.data.url;
-          imageUrlInput.value = data.data.url;
-          resultContainer.style.display = "block";
-          
-          // Clear the file input
-          fileInput.value = "";
-        } else {
-          throw new Error(data.error.message || "Upload failed");
-        }
+        statusTxt.innerText = "Done! Image uploaded.";
+        fileInput.value = "";
+        nameInput.value = "";
+        emailInput.value = "";
+        
+        displayImage(finalImageUrl, uploaderName);
 
       } catch (error) {
-        console.error("Upload error:", error);
         statusTxt.innerText = "Error: " + error.message;
-        statusTxt.style.color = "red";
       } finally {
-        // Always re-enable the button when finished
         uploadBtn.disabled = false;
       }
     });
-  </script>
 
+    // --- LOAD GALLERY ROUTINE ---
+    async function loadGallery() {
+      try {
+        const response = await fetch(SHEET_CSV_URL);
+        const csvText = await response.text();
+        
+        galleryDiv.innerHTML = ""; 
+        const rows = csvText.split('\n');
+        
+        for (let i = 1; i < rows.length; i++) {
+          const row = rows[i];
+          if (!row) continue;
+          
+          // Split by comma
+          const columns = row.split(',');
+          
+          // We search the row for the URL string dynamically 
+          // just in case Google Sheets changes the column order
+          let urlData = "";
+          let nameData = "";
+          
+          for (let col of columns) {
+            if (col.includes('http')) {
+              urlData = col.trim();
+            } else if (col !== columns[0] && !col.includes('@')) {
+              // Guess the name column by skipping timestamp and email
+              nameData = col.trim(); 
+            }
+          }
+          
+          if (urlData) {
+            displayImage(urlData, nameData || "Anonymous");
+          }
+        }
+      } catch (error) {
+        galleryDiv.innerHTML = "Could not load gallery data.";
+        console.error(error);
+      }
+    }
+
+    // Helper to draw the image and name
+    function displayImage(url, name) {
+      const container = document.createElement('div');
+      container.className = 'gallery-item';
+
+      const img = document.createElement('img');
+      img.src = url;
+
+      const label = document.createElement('div');
+      label.innerText = name;
+
+      container.appendChild(img);
+      container.appendChild(label);
+      
+      galleryDiv.prepend(container); 
+    }
+
+    loadGallery();
+  </script>
 </body>
 </html>
