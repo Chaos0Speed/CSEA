@@ -96,37 +96,42 @@
     });
 
     // --- LOAD GALLERY ROUTINE ---
+    // --- LOAD GALLERY ROUTINE ---
     async function loadGallery() {
       try {
-        // Fetching the Sheet CSV URL from the config object
         const response = await fetch(config.SHEET_CSV_URL + '&nocache=' + Date.now());
         const csvText = await response.text();
         
         galleryDiv.innerHTML = ""; 
-        const rows = csvText.split('\n');
         
+        // Split by newlines, handling both Windows (\r\n) and Mac/Linux (\n)
+        const rows = csvText.split(/\r?\n/);
+        
+        // Skip the first row (headers)
         for (let i = 1; i < rows.length; i++) {
           const row = rows[i];
-          if (!row) continue;
+          if (!row.trim()) continue; // Skip empty rows
           
           const columns = row.split(',');
-          let urlData = "";
-          let nameData = "";
           
-          for (let col of columns) {
-            if (col.includes('http')) {
-              urlData = col.trim();
-            } else if (col !== columns[0]) {
-              nameData = col.trim(); 
-            }
-          }
+          // Since the format is strictly [Timestamp, Name, Link]
+          // The Link is always the last column, Name is the second to last.
+          // .replace(/"/g, '') removes any accidental double-quotes added by Google Sheets.
+          const urlData = columns[columns.length - 1].replace(/"/g, '').trim();
+          const nameData = columns[columns.length - 2].replace(/"/g, '').trim();
           
-          if (urlData) {
-            displayImage(urlData, nameData || "Anonymous");
+          // Only draw the image if the extracted URL is valid
+          if (urlData.startsWith('http')) {
+            displayImage(urlData, nameData);
           }
         }
+        
+        if (galleryDiv.innerHTML === "") {
+          galleryDiv.innerHTML = "No images found in the gallery yet.";
+        }
+        
       } catch (error) {
-        galleryDiv.innerHTML = "Could not load gallery data.";
+        galleryDiv.innerHTML = "Could not load gallery data. Check browser console.";
         console.error(error);
       }
     }
